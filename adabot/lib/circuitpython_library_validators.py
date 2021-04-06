@@ -935,16 +935,31 @@ class library_validator():
 
         if repo["owner"]["login"] != "adafruit":
             return []
-        params = {"sort": "updated",
-                  "state": "all",
-                  "since": since.strftime("%Y-%m-%dT%H:%M:%SZ")}
-        response = github.get("/repos/" + repo["full_name"] + "/issues", params=params)
-        if not response.ok:
-            # replace 'output_handler' with ERROR_OUTPUT_HANDLER
-            self.output_file_data.append("Insights request failed: {}".format(repo["full_name"]))
-            return [ERROR_OUTPUT_HANDLER]
+        
+        # the API can only retrieve 100 items maximum (30 by default it seems)
+        # so loop through the pages to get everything
+        # TODO: put a limit on page_number and raise an error if reached ?
+        issues = []
+        page_number = 1 # page numbers are 1-based
+        while True:
+            params = {"sort": "updated",
+                      "state": "all",
+                      "per_page": 100,
+                      "page": page_number,
+                      "since": since.strftime("%Y-%m-%dT%H:%M:%SZ")
+                     }
+            response = github.get("/repos/" + repo["full_name"] + "/issues", params=params)
+        
+            if not response.ok:
+                # replace 'output_handler' with ERROR_OUTPUT_HANDLER
+                self.output_file_data.append("Insights request failed: {}".format(repo["full_name"]))
+                return [ERROR_OUTPUT_HANDLER]
 
-        issues = response.json()
+            issues_get = response.json()
+            issues += issues_get
+            page_number += 1
+            if len(issues_get) == 0: break
+        
         for issue in issues:
             created = datetime.datetime.strptime(issue["created_at"], "%Y-%m-%dT%H:%M:%SZ")
             if "pull_request" in issue:
